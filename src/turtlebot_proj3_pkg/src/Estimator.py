@@ -245,12 +245,20 @@ class DeadReckoning(Estimator):
     def __init__(self):
         super().__init__()
         self.canvas_title = 'Dead Reckoning'
-
+        self.r2d_element = self.r / (2*self.d)
     def update(self, _):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
-            # TODO: Your implementation goes here!
-            # You may ONLY use self.u and self.x[0] for estimation
-            raise NotImplementedError
+
+            curr_pos = self.x_hat[-1]
+            xdot = np.array([[-self.r2d_element, self.r2d_element],
+                            [(self.r/2) * np.cos(curr_pos[1]), (self.r/2) * np.cos(curr_pos[1])],
+                            [(self.r/2) * np.sin(curr_pos[1]), (self.r/2) * np.sin(curr_pos[1])],
+                            [1, 0],
+                            [0, 1]])
+            u = self.u[-1][1:]
+            delta_x = xdot @ u * self.dt
+            new_x = curr_pos[1:] + delta_x
+            self.x_hat.append(np.hstack([[curr_pos[0]+self.dt], new_x]))
 
 
 class KalmanFilter(Estimator):
@@ -279,16 +287,39 @@ class KalmanFilter(Estimator):
         super().__init__()
         self.canvas_title = 'Kalman Filter'
         self.phid = np.pi / 4
-        # TODO: Your implementation goes here!
-        # You may define the A, C, Q, R, and P matrices below.
+        self.A = np.eye(4)
+        self.B = np.array([[(self.r/2) * np.cos(self.phid), (self.r/2) * np.cos(self.phid)],
+                            [(self.r/2) * np.sin(self.phid), (self.r/2) * np.sin(self.phid)],
+                            [1, 0],
+                            [0, 1]])
+        self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
+        self.Q = np.eye(4)
+        self.P = np.eye(4)
+        self.R = np.eye(2)
 
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
     def update(self, _):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
-            # TODO: Your implementation goes here!
-            # You may use self.u, self.y, and self.x[0] for estimation
-            raise NotImplementedError
+            
+            # Step 5: State Extrapolation
+            print(self.u[1:])
+            print("self.u: ", self.u)
+            x_hat_new = self.A @ self.x_hat[-1][2:] + (self.B @ self.u[-1][1:]) * self.dt
+
+            # Step 6: Covariance Extrapolation
+            self.P = self.A @ self.P @ self.A.T + self.Q
+
+            # Step 7: Kalman Gain
+            K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
+            
+            # Step 8: State Update
+            x_hat_final = x_hat_new + K @ (self.y[-1][1:] - self.C @ x_hat_new)
+
+            # Step 9: Covariance Update
+            self.P = (np.eye(4) - K @ self.C) @ self.P
+
+            self.x_hat.append(np.hstack([[self.x_hat[-1][0]+self.dt, self.phid], x_hat_final]))
 
 
 # noinspection PyPep8Naming
