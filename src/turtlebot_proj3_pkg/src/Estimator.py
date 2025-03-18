@@ -72,19 +72,20 @@ class Estimator:
     """
     # noinspection PyTypeChecker
     def __init__(self):
-        self.d = 0.08
-        self.r = 0.033
-        self.u = []
-        self.x = []
-        self.y = []
-        self.x_hat = []  # Your estimates go here!
-        self.dt = 0.1
+
         self.fig, self.axd = plt.subplot_mosaic(
             [['xy', 'phi'],
              ['xy', 'x'],
              ['xy', 'y'],
              ['xy', 'thl'],
-             ['xy', 'thr']], figsize=(20.0, 10.0))
+             ['xy', 'thr'],
+             ['xy', 'phi_err'],
+             ['xy', 'x_err'],
+             ['xy', 'y_err'],
+             ['xy', 'thl_err'],
+             ['xy', 'thr_err']], figsize=(20.0, 15.0))
+        
+        # Initialize the true and estimated plots
         self.ln_xy, = self.axd['xy'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_xy_hat, = self.axd['xy'].plot([], 'o-c', label='Estimated')
         self.ln_phi, = self.axd['phi'].plot([], 'o-g', linewidth=2, label='True')
@@ -97,7 +98,23 @@ class Estimator:
         self.ln_thl_hat, = self.axd['thl'].plot([], 'o-c', label='Estimated')
         self.ln_thr, = self.axd['thr'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_thr_hat, = self.axd['thr'].plot([], 'o-c', label='Estimated')
+        
+        # Initialize the error plots
+        self.ln_phi_err, = self.axd['phi_err'].plot([], 'o-r', label='Error')
+        self.ln_x_err, = self.axd['x_err'].plot([], 'o-r', label='Error')
+        self.ln_y_err, = self.axd['y_err'].plot([], 'o-r', label='Error')
+        self.ln_thl_err, = self.axd['thl_err'].plot([], 'o-r', label='Error')
+        self.ln_thr_err, = self.axd['thr_err'].plot([], 'o-r', label='Error')
+        
         self.canvas_title = 'N/A'
+
+        self.d = 0.08
+        self.r = 0.033
+        self.u = []
+        self.x = []
+        self.y = []
+        self.x_hat = []  # Your estimates go here!
+        self.dt = 0.1
         self.sub_u = rospy.Subscriber('u', Float32MultiArray, self.callback_u)
         self.sub_x = rospy.Subscriber('x', Float32MultiArray, self.callback_x)
         self.sub_y = rospy.Subscriber('y', Float32MultiArray, self.callback_y)
@@ -124,20 +141,44 @@ class Estimator:
         self.axd['xy'].set_ylabel('y (m)')
         self.axd['xy'].set_aspect('equal', adjustable='box')
         self.axd['xy'].legend()
+        
         self.axd['phi'].set_ylabel('phi (rad)')
         self.axd['phi'].legend()
+        
         self.axd['x'].set_ylabel('x (m)')
         self.axd['x'].legend()
+        
         self.axd['y'].set_ylabel('y (m)')
         self.axd['y'].legend()
+        
         self.axd['thl'].set_ylabel('theta L (rad)')
         self.axd['thl'].legend()
+        
         self.axd['thr'].set_ylabel('theta R (rad)')
         self.axd['thr'].set_xlabel('Time (s)')
         self.axd['thr'].legend()
+        
+        # Initialize error subplots
+        self.axd['phi_err'].set_ylabel('phi error (rad)')
+        self.axd['phi_err'].legend()
+        
+        self.axd['x_err'].set_ylabel('x error (m)')
+        self.axd['x_err'].legend()
+        
+        self.axd['y_err'].set_ylabel('y error (m)')
+        self.axd['y_err'].legend()
+        
+        self.axd['thl_err'].set_ylabel('theta L error (rad)')
+        self.axd['thl_err'].legend()
+        
+        self.axd['thr_err'].set_ylabel('theta R error (rad)')
+        self.axd['thr_err'].set_xlabel('Time (s)')
+        self.axd['thr_err'].legend()
+        
         plt.tight_layout()
 
     def plot_update(self, _):
+        # Update the true and estimated plots
         self.plot_xyline(self.ln_xy, self.x)
         self.plot_xyline(self.ln_xy_hat, self.x_hat)
         self.plot_philine(self.ln_phi, self.x)
@@ -150,6 +191,13 @@ class Estimator:
         self.plot_thlline(self.ln_thl_hat, self.x_hat)
         self.plot_thrline(self.ln_thr, self.x)
         self.plot_thrline(self.ln_thr_hat, self.x_hat)
+        
+        # Update the error plots
+        self.plot_phi_error(self.ln_phi_err, self.error)
+        self.plot_x_error(self.ln_x_err, self.error)
+        self.plot_y_error(self.ln_y_err, self.error)
+        self.plot_thl_error(self.ln_thl_err, self.error)
+        self.plot_thr_error(self.ln_thr_err, self.error)
 
     def plot_xyline(self, ln, data):
         if len(data):
@@ -192,6 +240,41 @@ class Estimator:
             thr = [d[5] for d in data]
             ln.set_data(t, thr)
             self.resize_lim(self.axd['thr'], t, thr)
+
+    def plot_phi_error(self, ln, error_data):
+        if len(error_data):
+            t = [d[0] for d in error_data]
+            phi_err = [d[1] for d in error_data]
+            ln.set_data(t, phi_err)
+            self.resize_lim(self.axd['phi_err'], t, phi_err)
+
+    def plot_x_error(self, ln, error_data):
+        if len(error_data):
+            t = [d[0] for d in error_data]
+            x_err = [d[2] for d in error_data]
+            ln.set_data(t, x_err)
+            self.resize_lim(self.axd['x_err'], t, x_err)
+
+    def plot_y_error(self, ln, error_data):
+        if len(error_data):
+            t = [d[0] for d in error_data]
+            y_err = [d[3] for d in error_data]
+            ln.set_data(t, y_err)
+            self.resize_lim(self.axd['y_err'], t, y_err)
+
+    def plot_thl_error(self, ln, error_data):
+        if len(error_data):
+            t = [d[0] for d in error_data]
+            thl_err = [d[4] for d in error_data]
+            ln.set_data(t, thl_err)
+            self.resize_lim(self.axd['thl_err'], t, thl_err)
+
+    def plot_thr_error(self, ln, error_data):
+        if len(error_data):
+            t = [d[0] for d in error_data]
+            thr_err = [d[5] for d in error_data]
+            ln.set_data(t, thr_err)
+            self.resize_lim(self.axd['thr_err'], t, thr_err)
 
     # noinspection PyMethodMayBeStatic
     def resize_lim(self, ax, x, y):
@@ -287,6 +370,9 @@ class KalmanFilter(Estimator):
     """
     def __init__(self):
         super().__init__()
+        Qmult = rospy.get_param('Qmult', 1.0)
+        Pmult = rospy.get_param('Pmult', 1.0)
+        Rmult = rospy.get_param('Rmult', 1.0)
         self.canvas_title = 'Kalman Filter'
         self.phid = np.pi / 4
         self.A = np.eye(4)
@@ -295,10 +381,11 @@ class KalmanFilter(Estimator):
                             [1, 0],
                             [0, 1]])
         self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
-        self.Q = np.eye(4)
-        self.P = np.eye(4) * 100
-        self.R = np.eye(2)
 
+        self.Q = np.eye(4) * Qmult
+        self.P = np.eye(4) * Pmult
+        self.R = np.eye(2) * Rmult
+        self.error = []
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
     def update(self, _):
@@ -320,6 +407,7 @@ class KalmanFilter(Estimator):
             self.P = (np.eye(4) - K @ self.C) @ self.P
 
             self.x_hat.append(np.hstack([[self.x_hat[-1][0]+self.dt, self.phid], x_hat_final]))
+            self.error.append(np.abs(self.x_hat[-1] - self.x[-1]))
 
             print("SAVING TO FILE")
             np.savetxt('xhat1.txt', np.array(self.x_hat))

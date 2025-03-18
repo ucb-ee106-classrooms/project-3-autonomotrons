@@ -1,10 +1,23 @@
 <launch>
+    <!-- Existing Arguments -->
     <arg name="noise_injection" default="true" />
     <arg name="freeze_bearing" default="false" />
     <arg name="estimator_type" default="oracle_observer" />
+    
+    <!-- New Optional Arguments with Defaults -->
+    <arg name="Qmult" default="1.0" />
+    <arg name="Pmult" default="1.0" />
+    <arg name="Rmult" default="1.0" />
+
+    <!-- Parameters -->
     <param name="noise_injection" type="bool" value="$(arg noise_injection)" />
     <param name="freeze_bearing" type="bool" value="$(arg freeze_bearing)" />
     <param name="estimator_type" type="str" value="$(arg estimator_type)" />
+    <param name="Qmult" type="double" value="$(arg Qmult)" />
+    <param name="Pmult" type="double" value="$(arg Pmult)" />
+    <param name="Rmult" type="double" value="$(arg Rmult)" />
+
+    <!-- Nodes -->
     <node name="unicycle_node" pkg="proj3_pkg" type="unicycle_node" output="screen" />
     <node name="estimator_node" pkg="proj3_pkg" type="estimator_node.py" output="screen" />
 </launch>
