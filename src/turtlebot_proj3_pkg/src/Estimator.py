@@ -1,4 +1,5 @@
 import rospy
+import os 
 from std_msgs.msg import Float32MultiArray
 import matplotlib.pyplot as plt
 import numpy as np
@@ -101,6 +102,7 @@ class Estimator:
         self.sub_x = rospy.Subscriber('x', Float32MultiArray, self.callback_x)
         self.sub_y = rospy.Subscriber('y', Float32MultiArray, self.callback_y)
         self.tmr_update = rospy.Timer(rospy.Duration(self.dt), self.update)
+        
 
     def callback_u(self, msg):
         self.u.append(msg.data)
@@ -294,7 +296,7 @@ class KalmanFilter(Estimator):
                             [0, 1]])
         self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
         self.Q = np.eye(4)
-        self.P = np.eye(4)
+        self.P = np.eye(4) * 100
         self.R = np.eye(2)
 
     # noinspection DuplicatedCode
@@ -303,8 +305,6 @@ class KalmanFilter(Estimator):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
             
             # Step 5: State Extrapolation
-            print(self.u[1:])
-            print("self.u: ", self.u)
             x_hat_new = self.A @ self.x_hat[-1][2:] + (self.B @ self.u[-1][1:]) * self.dt
 
             # Step 6: Covariance Extrapolation
@@ -321,6 +321,12 @@ class KalmanFilter(Estimator):
 
             self.x_hat.append(np.hstack([[self.x_hat[-1][0]+self.dt, self.phid], x_hat_final]))
 
+            print("SAVING TO FILE")
+            np.savetxt('xhat1.txt', np.array(self.x_hat))
+
+
+            save_to_file('/home/cc/ee106b/sp25/class/ee106b-abh/project3/xhat.txt', self.x_hat)
+            save_to_file('/home/cc/ee106b/sp25/class/ee106b-abh/project3/x.txt', self.x)
 
 # noinspection PyPep8Naming
 class ExtendedKalmanFilter(Estimator):
@@ -363,4 +369,29 @@ class ExtendedKalmanFilter(Estimator):
             # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
             raise NotImplementedError
+
+
+def save_to_file(filename, data):
+    """
+    Save data to a file in append mode. If the file doesn't exist, create it.
+    
+    Parameters:
+        filename (str): The name of the file to save the data to.
+        data (np.ndarray): The data to save.
+    """
+    # Ensure the data is a NumPy array
+    data = np.array(data, dtype=float)
+    if os.path.exists(filename):
+        os.remove(filename)
+    
+    # Check if the file exists
+    if not os.path.exists(filename):
+        print(f"File '{filename}' does not exist. Creating it.")
+        # Create the file and write the header (optional)
+        with open(filename, 'w') as f:
+            f.write("# This file contains data in append mode.\n")
+    
+    # Append the data to the file
+    with open(filename, 'ab') as f:  # 'ab' mode opens the file in binary append mode
+        np.savetxt(f, data)
 
