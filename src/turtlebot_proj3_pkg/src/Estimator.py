@@ -368,6 +368,9 @@ class KalmanFilter(Estimator):
     """
     def __init__(self):
         super().__init__()
+        Qmult = rospy.get_param('Qmult', 1.0)
+        Pmult = rospy.get_param('Pmult', 1.0)
+        Rmult = rospy.get_param('Rmult', 1.0)
         self.canvas_title = 'Kalman Filter'
         self.phid = np.pi / 4
         self.A = np.eye(4)
@@ -376,9 +379,9 @@ class KalmanFilter(Estimator):
                             [1, 0],
                             [0, 1]])
         self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
-        self.Q = np.eye(4)
-        self.P = np.eye(4)
-        self.R = np.eye(2)
+        self.Q = np.eye(4) * Qmult
+        self.P = np.eye(4) * Pmult
+        self.R = np.eye(2) * Rmult
         self.error = []
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
