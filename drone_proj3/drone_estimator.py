@@ -241,30 +241,45 @@ class ExtendedKalmanFilter(Estimator):
     def __init__(self, is_noisy=False):
         super().__init__(is_noisy)
         self.canvas_title = 'Extended Kalman Filter'
-        # TODO: Your implementation goes here!
         # You may define the Q, R, and P matrices below.
         self.A = None
         self.B = None
         self.C = None
-        self.Q = None
-        self.R = None
-        self.P = None
+        self.Q = np.eye(4)
+        self.R = np.eye(2)
+        self.P = np.eye(4)
 
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
-            # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
-            raise NotImplementedError
+            
+            # Step 6: Dynamics Linearization
+            self.A = self.g(self.x_hat[-1], self.u[-1])
 
-    def g(self, x, u):
-        raise NotImplementedError
+            # Step 7: Covariance Extrapolation
+            self.P = self.A @ self.P @ self.A.T + self.Q
 
-    def h(self, x, y_obs):
-        raise NotImplementedError
+            # Step 9: Kalman Gain
+            K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
+
+            # Step 11: Covariance Update
+            self.P = (np.eye(4) - K @ self.C) @ self.P
+
+    # I don't think these are needed? I just manually found the Jacobian, is there a better way...
+    # def g(self, x, u):
+    #     raise NotImplementedError
+
+    # def h(self, x, y_obs):
+    #     raise NotImplementedError
 
     def approx_A(self, x, u):
-        raise NotImplementedError
-    
+        return np.array([[1, 0, 0, self.dt, 0, 0],
+                        [0, 1, 0, 0, self.dt, 0], 
+                        [0, 0, 1, 0, 0, self.dt],
+                        [0, 0, (-np.cos(x[2])/self.m) * u[1] * self.dt, 1, 0, 0],
+                        [0, 0, (-np.sin(x[2])/self.m) * u[1] * self.dt, 0, 1, 0],
+                        [0, 0, 0, 0, 0, 1]
+                    ])
     def approx_C(self, x):
         raise NotImplementedError
