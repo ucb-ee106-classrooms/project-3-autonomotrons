@@ -78,12 +78,7 @@ class Estimator:
              ['xy', 'x'],
              ['xy', 'y'],
              ['xy', 'thl'],
-             ['xy', 'thr'],
-             ['xy', 'phi_err'],
-             ['xy', 'x_err'],
-             ['xy', 'y_err'],
-             ['xy', 'thl_err'],
-             ['xy', 'thr_err']], figsize=(20.0, 15.0))
+             ['xy', 'thr']], figsize=(20.0, 15.0))
         
         # Initialize the true and estimated plots
         self.ln_xy, = self.axd['xy'].plot([], 'o-g', linewidth=2, label='True')
@@ -99,12 +94,7 @@ class Estimator:
         self.ln_thr, = self.axd['thr'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_thr_hat, = self.axd['thr'].plot([], 'o-c', label='Estimated')
         
-        # Initialize the error plots
-        self.ln_phi_err, = self.axd['phi_err'].plot([], 'o-r', label='Error')
-        self.ln_x_err, = self.axd['x_err'].plot([], 'o-r', label='Error')
-        self.ln_y_err, = self.axd['y_err'].plot([], 'o-r', label='Error')
-        self.ln_thl_err, = self.axd['thl_err'].plot([], 'o-r', label='Error')
-        self.ln_thr_err, = self.axd['thr_err'].plot([], 'o-r', label='Error')
+
         
         self.canvas_title = 'N/A'
 
@@ -158,23 +148,6 @@ class Estimator:
         self.axd['thr'].set_xlabel('Time (s)')
         self.axd['thr'].legend()
         
-        # Initialize error subplots
-        self.axd['phi_err'].set_ylabel('phi error (rad)')
-        self.axd['phi_err'].legend()
-        
-        self.axd['x_err'].set_ylabel('x error (m)')
-        self.axd['x_err'].legend()
-        
-        self.axd['y_err'].set_ylabel('y error (m)')
-        self.axd['y_err'].legend()
-        
-        self.axd['thl_err'].set_ylabel('theta L error (rad)')
-        self.axd['thl_err'].legend()
-        
-        self.axd['thr_err'].set_ylabel('theta R error (rad)')
-        self.axd['thr_err'].set_xlabel('Time (s)')
-        self.axd['thr_err'].legend()
-        
         plt.tight_layout()
 
     def plot_update(self, _):
@@ -192,12 +165,6 @@ class Estimator:
         self.plot_thrline(self.ln_thr, self.x)
         self.plot_thrline(self.ln_thr_hat, self.x_hat)
         
-        # Update the error plots
-        self.plot_phi_error(self.ln_phi_err, self.error)
-        self.plot_x_error(self.ln_x_err, self.error)
-        self.plot_y_error(self.ln_y_err, self.error)
-        self.plot_thl_error(self.ln_thl_err, self.error)
-        self.plot_thr_error(self.ln_thr_err, self.error)
 
     def plot_xyline(self, ln, data):
         if len(data):
@@ -241,40 +208,6 @@ class Estimator:
             ln.set_data(t, thr)
             self.resize_lim(self.axd['thr'], t, thr)
 
-    def plot_phi_error(self, ln, error_data):
-        if len(error_data):
-            t = [d[0] for d in error_data]
-            phi_err = [d[1] for d in error_data]
-            ln.set_data(t, phi_err)
-            self.resize_lim(self.axd['phi_err'], t, phi_err)
-
-    def plot_x_error(self, ln, error_data):
-        if len(error_data):
-            t = [d[0] for d in error_data]
-            x_err = [d[2] for d in error_data]
-            ln.set_data(t, x_err)
-            self.resize_lim(self.axd['x_err'], t, x_err)
-
-    def plot_y_error(self, ln, error_data):
-        if len(error_data):
-            t = [d[0] for d in error_data]
-            y_err = [d[3] for d in error_data]
-            ln.set_data(t, y_err)
-            self.resize_lim(self.axd['y_err'], t, y_err)
-
-    def plot_thl_error(self, ln, error_data):
-        if len(error_data):
-            t = [d[0] for d in error_data]
-            thl_err = [d[4] for d in error_data]
-            ln.set_data(t, thl_err)
-            self.resize_lim(self.axd['thl_err'], t, thl_err)
-
-    def plot_thr_error(self, ln, error_data):
-        if len(error_data):
-            t = [d[0] for d in error_data]
-            thr_err = [d[5] for d in error_data]
-            ln.set_data(t, thr_err)
-            self.resize_lim(self.axd['thr_err'], t, thr_err)
 
     # noinspection PyMethodMayBeStatic
     def resize_lim(self, ax, x, y):
@@ -382,9 +315,9 @@ class KalmanFilter(Estimator):
                             [0, 1]])
         self.C = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
 
-        self.Q = np.eye(4) * Qmult
-        self.P = np.eye(4) * Pmult
-        self.R = np.eye(2) * Rmult
+        self.Q = np.eye(4) * Qmult * 0.85
+        self.P = np.eye(4) * Pmult * 100
+        self.R = np.eye(2) * Rmult * 1
         self.error = []
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
