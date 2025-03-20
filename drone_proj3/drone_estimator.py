@@ -253,16 +253,21 @@ class ExtendedKalmanFilter(Estimator):
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
             # You may use self.u, self.y, and self.x[0] for estimation
-            
+            if self.x_hat[-1].shape == (6,):
+                self.x_hat[-1] = self.x_hat[-1][:, np.newaxis]
+            if self.x[-1].shape == (6,):
+                self.x[-1] = self.x[-1][:, np.newaxis]
+            print(self.x_hat[-1].shape)
+            curr_y = self.y[-1][:, np.newaxis]
             # Step 5: State Extrapolation
             x_new = self.g(self.x[-1], self.u[-1])
-            # print(f"x_new shape: {x_new.shape}")
+            print(f"x_new shape: {x_new.shape}")
 
             # Step 6: Dynamics Linearization
             self.A = self.approx_A(self.x_hat[-1], self.u[-1])
-            # print(f"self.A shape: {self.A.shape}")
-            # print(f"self.P shape: {self.P.shape}")
-            # print(f"self.Q shape: {self.Q.shape}")
+            print(f"self.A shape: {self.A.shape}")
+            print(f"self.P shape: {self.P.shape}")
+            print(f"self.Q shape: {self.Q.shape}")
             # Step 7: Covariance Extrapolation
             self.P = self.A @ self.P @ self.A.T + self.Q
 
@@ -273,17 +278,17 @@ class ExtendedKalmanFilter(Estimator):
             K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
 
             # Step 10:  State Update
-            x_new = x_new + K @ (self.y[-1] - self.h(x_new, self.l))
-
+            
+            x_new = x_new + K @ (curr_y - self.h(x_new, self.l))
+            print(f"x_new shape: {x_new.shape}")
             # Step 11: Covariance Update
             self.P = (np.eye(6) - K @ self.C) @ self.P
+            self.x_hat.append(x_new)
     
     # God I really hope I coded these right 
 
     def g(self, x, u):
         u = u[:, np.newaxis]
-        x = x[:, np.newaxis]
-
         f = (np.array([
             [x[3][0]],
             [x[4][0]],
@@ -298,18 +303,20 @@ class ExtendedKalmanFilter(Estimator):
             [-np.sin(x[2][0]) / self.m, 0],
             [np.cos(x[2][0]) / self.m, 0],
             [0, 1 / self.J]
-        ]) @ u) * self.dt
-        return x + f
+        ]) @ u)
+        #print(f"f shape {f.shape}, x shape{x.shape}")
+        return x + f * self.dt
           
         # return np.array([[np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2)], 
         #                  [x[2]]])
 
     def approx_A(self, x, u):
+        print(x.shape, u.shape)
         return np.array([[1, 0, 0, self.dt, 0, 0],
                         [0, 1, 0, 0, self.dt, 0], 
                         [0, 0, 1, 0, 0, self.dt],
-                        [0, 0, (-np.cos(x[2])/self.m) * u[1] * self.dt, 1, 0, 0],
-                        [0, 0, (-np.sin(x[2])/self.m) * u[1] * self.dt, 0, 1, 0],
+                        [0, 0, (-np.cos(x[2][0])/self.m) * u[1] * self.dt, 1, 0, 0],
+                        [0, 0, (-np.sin(x[2][0])/self.m) * u[1] * self.dt, 0, 1, 0],
                         [0, 0, 0, 0, 0, 1]
                     ])
     def approx_C(self, x):
