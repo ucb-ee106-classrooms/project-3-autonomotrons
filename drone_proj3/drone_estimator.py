@@ -245,9 +245,9 @@ class ExtendedKalmanFilter(Estimator):
         self.A = None
         self.B = None
         self.C = None
-        self.Q = np.eye(4)
+        self.Q = np.eye(6)
         self.R = np.eye(2)
-        self.P = np.eye(4)
+        self.P = np.eye(6)
 
     # noinspection DuplicatedCode
     def update(self, i):
@@ -256,10 +256,13 @@ class ExtendedKalmanFilter(Estimator):
             
             # Step 5: State Extrapolation
             x_new = self.g(self.x[-1], self.u[-1])
+            # print(f"x_new shape: {x_new.shape}")
 
             # Step 6: Dynamics Linearization
-            self.A = self.g(self.x_hat[-1], self.u[-1])
-
+            self.A = self.approx_A(self.x_hat[-1], self.u[-1])
+            # print(f"self.A shape: {self.A.shape}")
+            # print(f"self.P shape: {self.P.shape}")
+            # print(f"self.Q shape: {self.Q.shape}")
             # Step 7: Covariance Extrapolation
             self.P = self.A @ self.P @ self.A.T + self.Q
 
@@ -273,21 +276,33 @@ class ExtendedKalmanFilter(Estimator):
             x_new = x_new + K @ (self.y[-1] - self.h(x_new, self.l))
 
             # Step 11: Covariance Update
-            self.P = (np.eye(4) - K @ self.C) @ self.P
+            self.P = (np.eye(6) - K @ self.C) @ self.P
     
     # God I really hope I coded these right 
 
     def g(self, x, u):
-        return np.array([[],
-                         [],
-                         [], 
-                         [], 
-                         [], 
-                         []])
+        u = u[:, np.newaxis]
+        x = x[:, np.newaxis]
 
-    def h(self, x, y_obs):
-        return np.array([[np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2)], 
-                         [x[2]]])
+        f = (np.array([
+            [x[3][0]],
+            [x[4][0]],
+            [x[5][0]],
+            [0],
+            [-9.8],
+            [0]
+        ])+ np.array([
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [-np.sin(x[2][0]) / self.m, 0],
+            [np.cos(x[2][0]) / self.m, 0],
+            [0, 1 / self.J]
+        ]) @ u) * self.dt
+        return x + f
+          
+        # return np.array([[np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2)], 
+        #                  [x[2]]])
 
     def approx_A(self, x, u):
         return np.array([[1, 0, 0, self.dt, 0, 0],
@@ -298,7 +313,13 @@ class ExtendedKalmanFilter(Estimator):
                         [0, 0, 0, 0, 0, 1]
                     ])
     def approx_C(self, x):
-        return np.array([[(-self.l[0] + x[0])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1]))),
-                           (-self.l[2] + x[1])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1]))), 0],
-                         [0, 0, 1],
-                         ])
+        r = (np.sqrt((self.l[0]-x[0][0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1][0])))
+        return np.array([[(-self.l[0] + x[0][0])/r, (-self.l[2] + x[1][0])/r, 0, 0, 0, 0],
+                         [0, 0, 1, 0, 0, 0]
+                        ])
+
+    def h(self, x, l):
+        return np.array([
+            [(np.sqrt((l[0]-x[0][0]) ** 2 + l[1] ** 2 + (l[2] - x[1][0])))],
+            [x[2][0]]
+        ])
