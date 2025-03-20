@@ -245,9 +245,9 @@ class ExtendedKalmanFilter(Estimator):
         self.A = None
         self.B = None
         self.C = None
-        self.Q = np.eye(4)
+        self.Q = np.eye(6)
         self.R = np.eye(2)
-        self.P = np.eye(4)
+        self.P = np.eye(6)
 
     # noinspection DuplicatedCode
     def update(self, i):
@@ -258,7 +258,7 @@ class ExtendedKalmanFilter(Estimator):
             x_new = self.g(self.x[-1], self.u[-1])
 
             # Step 6: Dynamics Linearization
-            self.A = self.g(self.x_hat[-1], self.u[-1])
+            self.A = self.approx_A(self.x_hat[-1], self.u[-1])
 
             # Step 7: Covariance Extrapolation
             self.P = self.A @ self.P @ self.A.T + self.Q
@@ -273,32 +273,50 @@ class ExtendedKalmanFilter(Estimator):
             x_new = x_new + K @ (self.y[-1] - self.h(x_new, self.l))
 
             # Step 11: Covariance Update
-            self.P = (np.eye(4) - K @ self.C) @ self.P
+            self.P = (np.eye(6) - K @ self.C) @ self.P
     
     # God I really hope I coded these right 
 
     def g(self, x, u):
-        return np.array([[],
-                         [],
-                         [], 
-                         [], 
-                         [], 
-                         []])
+        return np.array([[x[0] + x[3] * self.dt],
+                         [x[1] + x[4] * self.dt],
+                         [x[2] + x[5] * self.dt], 
+                         [x[3] - (np.sin(x[2])/self.m) * u[0] * self.dt], 
+                         [x[4] + ((np.cos(x[2])/self.m) * u[0] - self.gr) * self.dt], 
+                         [x[5] + (u[1]/self.J) * self.dt]])
 
     def h(self, x, y_obs):
-        return np.array([[np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2)], 
-                         [x[2]]])
+        return np.array([np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2), 
+                         x[2]])
 
     def approx_A(self, x, u):
         return np.array([[1, 0, 0, self.dt, 0, 0],
                         [0, 1, 0, 0, self.dt, 0], 
                         [0, 0, 1, 0, 0, self.dt],
-                        [0, 0, (-np.cos(x[2])/self.m) * u[1] * self.dt, 1, 0, 0],
-                        [0, 0, (-np.sin(x[2])/self.m) * u[1] * self.dt, 0, 1, 0],
-                        [0, 0, 0, 0, 0, 1]
-                    ])
+                        [0, 0, (-np.cos(x[2])/self.m) * u[0] * self.dt, 1, 0, 0],
+                        [0, 0, (-np.sin(x[2])/self.m) * u[0] * self.dt, 0, 1, 0],
+                        [0, 0, 0, 0, 0, 1]])
     def approx_C(self, x):
-        return np.array([[(-self.l[0] + x[0])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1]))),
-                           (-self.l[2] + x[1])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1]))), 0],
-                         [0, 0, 1],
-                         ])
+        C11 = (-self.l[0] + x[0])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1])))
+        C12 = (-self.l[2] + x[1])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1])))
+        # Idk why the fudge it makes it into a list, but the parentheses are mandatory so cope
+        return np.array([[C11[0], C12[0], 0, 0, 0, 0],
+                         [0, 0, 1, 0, 0, 0]])
+    # Let's copy these here for my sanity
+    # Attributes:
+        # u : list
+        #     A list of system inputs, where, for the ith data point u[i],
+        #     u[i][1] is the thrust of the quadrotor
+        #     u[i][2] is right wheel rotational speed (rad/s).
+        # x : list
+        #     A list of system states, where, for the ith data point x[i],
+        #     x[i][0] is translational position in x (m),
+        #     x[i][1] is translational position in z (m),
+        #     x[i][2] is the bearing (rad) of the quadrotor
+        #     x[i][3] is translational velocity in x (m/s),
+        #     x[i][4] is translational velocity in z (m/s),
+        #     x[i][5] is angular velocity (rad/s),
+        # y : list
+        #     A list of system outputs, where, for the ith data point y[i],
+        #     y[i][1] is distance to the landmark (m)
+        #     y[i][2] is relative bearing (rad) w.r.t. the landmark
