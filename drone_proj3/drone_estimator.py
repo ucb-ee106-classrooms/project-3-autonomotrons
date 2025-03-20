@@ -256,7 +256,6 @@ class ExtendedKalmanFilter(Estimator):
             
             # Step 5: State Extrapolation
             x_new = self.g(self.x[-1], self.u[-1])
-
             # Step 6: Dynamics Linearization
             self.A = self.approx_A(self.x_hat[-1], self.u[-1])
 
@@ -269,11 +268,15 @@ class ExtendedKalmanFilter(Estimator):
             # Step 9: Kalman Gain
             K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
 
+
+            y = self.y[-1][:, np.newaxis]
             # Step 10:  State Update
-            x_new = x_new + K @ (self.y[-1] - self.h(x_new, self.l))
+            x_new = x_new + K @ (y - self.h(x_new, self.l))
 
             # Step 11: Covariance Update
             self.P = (np.eye(6) - K @ self.C) @ self.P
+            
+            self.x_hat.append(x_new.flatten())
     
     # God I really hope I coded these right 
 
