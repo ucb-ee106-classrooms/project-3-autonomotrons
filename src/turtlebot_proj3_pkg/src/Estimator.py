@@ -425,11 +425,11 @@ class ExtendedKalmanFilter(Estimator):
             # Step 9: Kalman Gain
             K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
 
-            #y = self.y[-1][:, np.newaxis]
+            y = np.array(self.y[-1][1:])[:, np.newaxis]
             # Step 10:  State Update
-            # print(self.y[-1][1:])
             # print(self.h(x_new.flatten(), self.landmark).shape)
-            x_new = x_new + K @ (self.y[-1][1:] - self.h(x_new.flatten(), self.landmark))
+            # print(y.shape)
+            x_new = x_new + K @ (y - self.h(x_new.flatten(), self.landmark))
 
             # Step 11: Covariance Update
             self.P = (np.eye(5) - K @ self.C) @ self.P
