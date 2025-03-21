@@ -90,9 +90,9 @@ class Estimator:
         self.ln_x_hat, = self.axd['x'].plot([], 'o-c', label='Estimated')
         self.ln_y, = self.axd['y'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_y_hat, = self.axd['y'].plot([], 'o-c', label='Estimated')
-        self.ln_thl, = self.axd['thl'].plot([], 'o-g', linewidth=2, label='True')
+        # self.ln_thl, = self.axd['thl'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_thl_hat, = self.axd['thl'].plot([], 'o-c', label='Estimated')
-        self.ln_thr, = self.axd['thr'].plot([], 'o-g', linewidth=2, label='True')
+        # self.ln_thr, = self.axd['thr'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_thr_hat, = self.axd['thr'].plot([], 'o-c', label='Estimated')
         
         self.dt = 0.1
@@ -105,22 +105,26 @@ class Estimator:
         self.x = []
         self.y = []
         self.x_hat = []  # Your estimates go here!
-        self.first_time = time.perf_counter()
+        self.first_time = 0.0 # time.perf_counter()
         self.sub_u = rospy.Subscriber('u', Float64MultiArray, self.callback_u)
         self.sub_x = rospy.Subscriber('x', Float64MultiArray, self.callback_x)
         self.sub_y = rospy.Subscriber('y', Float64MultiArray, self.callback_y)
         self.tmr_update = rospy.Timer(rospy.Duration(self.dt), self.update)
+        self.t0 = time.perf_counter()
 
     def callback_u(self, msg):
         self.u.append(msg.data)
 
     def callback_x(self, msg):
-        self.x.append(msg.data)
+        data = list(msg.data)
+        data[0] -= self.t0
+        self.x.append(tuple(data))
         if len(self.x_hat) == 0:
-            self.x_hat.append(msg.data)
+            self.x_hat.append(tuple(data))
 
     def callback_y(self, msg):
         self.y.append(msg.data)
+
 
     def update(self, _):
         raise NotImplementedError
@@ -160,9 +164,9 @@ class Estimator:
         self.plot_xline(self.ln_x_hat, self.x_hat)
         self.plot_yline(self.ln_y, self.x)
         self.plot_yline(self.ln_y_hat, self.x_hat)
-        self.plot_thlline(self.ln_thl, self.x)
+        # self.plot_thlline(self.ln_thl, self.x)
         self.plot_thlline(self.ln_thl_hat, self.x_hat)
-        self.plot_thrline(self.ln_thr, self.x)
+        # self.plot_thrline(self.ln_thr, self.x)
         self.plot_thrline(self.ln_thr_hat, self.x_hat)
         
 
@@ -384,6 +388,7 @@ class ExtendedKalmanFilter(Estimator):
         # You may define the Q, R, and P matrices below.
         self.Q = np.eye(5) * 1
         self.R = np.eye(3) * 1
+        self.R = np.array([[1, 0.5, 0.1], [0.5, 0.1, 0.2], [0.1, 0.2, 0.2]])*0.001
         self.P = np.eye(5) * 1
         self.last_t = None
         self.C = np.array([[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]])
@@ -396,7 +401,9 @@ class ExtendedKalmanFilter(Estimator):
 
             # Step 5: State Extrapolation
             x_new = self.g(self.x_hat[-1][1:], self.u[-1])
-
+            print("PREVIOUS X_HAT: ", self.x_hat[-1][1:])
+            print("X HAT: ", x_new)
+            print("X ACTUAL: ", self.x[-1][1:])
             # Step 6: Dynamics Linearization
             self.A = self.approx_A(self.x_hat[-1][1:], self.u[-1])
 
@@ -407,15 +414,17 @@ class ExtendedKalmanFilter(Estimator):
             K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
 
             # Step 10: State Update
-            x_hat_final = x_new + K @ (self.y[-1][1:] - self.C @ x_new)
-
-            #y = np.array(self.y[-1][1:])[:, np.newaxis]
+            y = np.array(self.y[-1][1:])[:, np.newaxis]
+            print("X NEW @ C: ", (self.C @ x_new).shape)
+            print("DIFFERENCE OF X NEW AND MEASURED: ", y - self.C @ x_new)
+            x_hat_final = x_new + K @ (y - self.C @ x_new)
 
             # Step 11: Covariance Update
             self.P = (np.eye(5) - K @ self.C) @ self.P
 
             self.x_hat.append(np.hstack([[self.x_hat[-1][0]+self.dt], x_hat_final.flatten()]))
-
+            print("LAST T: ", self.x_hat[-1][0])
+            print("DT: ", self.x_hat[-1][0] - self.x_hat[-2][0])
     def g(self, x, u):
         phi_dot = (self.r / (2 * self.d) * (u[1] - u[0]))
         v = self.r / 2 * (u[0] + u[1])
