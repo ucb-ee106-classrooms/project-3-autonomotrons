@@ -62,7 +62,7 @@ class turtlebot_ekf():
             self.last_x = marray
             self.x_pub.publish(marray)
         marray = Float64MultiArray()
-        noisy_state = np.random.multivariate_normal(measured_state, np.array([[1, 0.5, 0.1], [0.5, 0.1, 0.2], [0.1, 0.2, 0.2]])*0.001)
+        noisy_state = np.random.multivariate_normal(measured_state, np.array([[1, 0.5, 0.1], [0.5, 0.1, 0.2], [0.1, 0.2, 0.2]])*0.0001)
         marray.data = [time.perf_counter()] + (noisy_state).flatten().tolist()
         self.last_y = marray
         #self.y_pub.publish(marray)
