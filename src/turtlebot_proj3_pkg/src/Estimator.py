@@ -1,6 +1,7 @@
 import rospy
 import os 
-from std_msgs.msg import Float32MultiArray
+import time
+from std_msgs.msg import Float64MultiArray
 import matplotlib.pyplot as plt
 import numpy as np
 plt.rcParams['font.family'] = ['FreeSans', 'Helvetica', 'Arial']
@@ -94,7 +95,7 @@ class Estimator:
         self.ln_thr, = self.axd['thr'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_thr_hat, = self.axd['thr'].plot([], 'o-c', label='Estimated')
         
-
+        self.dt = 0.1
         
         self.canvas_title = 'N/A'
 
@@ -104,12 +105,11 @@ class Estimator:
         self.x = []
         self.y = []
         self.x_hat = []  # Your estimates go here!
-        self.dt = 0.1
-        self.sub_u = rospy.Subscriber('u', Float32MultiArray, self.callback_u)
-        self.sub_x = rospy.Subscriber('x', Float32MultiArray, self.callback_x)
-        self.sub_y = rospy.Subscriber('y', Float32MultiArray, self.callback_y)
+        self.first_time = time.perf_counter()
+        self.sub_u = rospy.Subscriber('u', Float64MultiArray, self.callback_u)
+        self.sub_x = rospy.Subscriber('x', Float64MultiArray, self.callback_x)
+        self.sub_y = rospy.Subscriber('y', Float64MultiArray, self.callback_y)
         self.tmr_update = rospy.Timer(rospy.Duration(self.dt), self.update)
-        
 
     def callback_u(self, msg):
         self.u.append(msg.data)
@@ -322,7 +322,7 @@ class KalmanFilter(Estimator):
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
     def update(self, _):
-        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
+        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0] and len(self.u) > 0:
             
             # Step 5: State Extrapolation
             x_hat_new = self.A @ self.x_hat[-1][2:] + (self.B @ self.u[-1][1:]) * self.dt
@@ -380,95 +380,59 @@ class ExtendedKalmanFilter(Estimator):
     def __init__(self):
         super().__init__()
         self.canvas_title = 'Extended Kalman Filter'
-        self.landmark = (0.5, 0.5)
         # TODO: Your implementation goes here!
         # You may define the Q, R, and P matrices below.
         self.Q = np.eye(5) * 1
-        self.R = np.eye(2) * 1
+        self.R = np.eye(3) * 1
         self.P = np.eye(5) * 1
-    # noinspection DuplicatedCode
+        self.last_t = None
+        self.C = np.array([[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]])
 
-    #  u : list
-    #         A list of system inputs, where, for the ith data point u[i],
-    #         u[i][0] is timestamp (s),
-    #         u[i][1] is left wheel rotational speed (rad/s), and
-    #         u[i][2] is right wheel rotational speed (rad/s).
-    #     x : list
-    #         A list of system states, where, for the ith data point x[i],
-    #         x[i][0] is timestamp (s),
-    #         x[i][1] is bearing (rad),
-    #         x[i][2] is translational position in x (m),
-    #         x[i][3] is translational position in y (m),
-    #         x[i][4] is left wheel rotational position (rad), and
-    #         x[i][5] is right wheel rotational position (rad).
-    #     y : list
-    #         A list of system outputs, where, for the ith data point y[i],
-    #         y[i][0] is timestamp (s),
-    #         y[i][1] is distance to the landmark (m) when freeze_bearing:=false,
-    #         y[i][2] is relative bearing (rad) w.r.t. the landmark when
 
     def update(self, _):
-        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
+        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0] and len(self.u) > 0:
             # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
+
             # Step 5: State Extrapolation
-            x_new = self.g(self.x_hat[-1][1:], self.u[-1][1:])
+            x_new = self.g(self.x_hat[-1][1:], self.u[-1])
+
             # Step 6: Dynamics Linearization
-            self.A = self.approx_A(self.x_hat[-1][1:], self.u[-1][1:])
+            self.A = self.approx_A(self.x_hat[-1][1:], self.u[-1])
 
             # Step 7: Covariance Extrapolation
             self.P = self.A @ self.P @ self.A.T + self.Q
 
-            # Step 8: Measurement Linearization
-            self.C = self.approx_C(x_new.flatten())
-
             # Step 9: Kalman Gain
             K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
 
-            y = np.array(self.y[-1][1:])[:, np.newaxis]
-            # Step 10:  State Update
-            # print(self.h(x_new.flatten(), self.landmark).shape)
-            # print(y.shape)
-            x_new = x_new + K @ (y - self.h(x_new.flatten(), self.landmark))
+            # Step 10: State Update
+            x_hat_final = x_new + K @ (self.y[-1][1:] - self.C @ x_new)
+
+            #y = np.array(self.y[-1][1:])[:, np.newaxis]
 
             # Step 11: Covariance Update
             self.P = (np.eye(5) - K @ self.C) @ self.P
-            
-            self.x_hat.append(np.hstack([[self.x_hat[-1][0]+self.dt], x_new.flatten()]))
+
+            self.x_hat.append(np.hstack([[self.x_hat[-1][0]+self.dt], x_hat_final.flatten()]))
 
     def g(self, x, u):
+        phi_dot = (self.r / (2 * self.d) * (u[1] - u[0]))
+        v = self.r / 2 * (u[0] + u[1])
         return np.array([
-            [x[0] + ((-self.r / (2 * self.d)) * u[0] + (self.r / (2 * self.d)) * u[1]) * self.dt],
-            [x[1] + ((self.r * np.cos(x[0]) / (2)) * u[0] + (self.r * np.cos(x[0])/ (2)) * u[1]) * self.dt],
-            [x[2] + ((self.r * np.sin(x[0]) / (2)) * u[0] + (self.r * np.sin(x[0])/ (2)) * u[1]) * self.dt],
+            [x[0] + phi_dot * self.dt],
+            [x[1] + v * np.cos(x[0]) * self.dt],
+            [x[2] + v * np.sin(x[0]) * self.dt],
             [x[3] + u[0] * self.dt],
             [x[4] + u[1] * self.dt]
         ])
     
-    def approx_C(self, x):
-        # print(x.shape)
-        r = np.sqrt((self.landmark[0] - x[1])**2 + (self.landmark[1] - x[2])**2)
-        # print(r.shape)
-        # print(x[0], x[1])
-        # print(self.landmark[0], self.landmark[1])
-        return np.array([
-            [0, -(self.landmark[0] - x[1])/ r, -(self.landmark[1] - x[2])/r, 0, 0],
-            [1, 0, 0, 0, 0]
-        ])
-
-    def h(self, x, y_obs):
-        r = np.sqrt((self.landmark[0] - x[1])**2 + (self.landmark[1] - x[2])**2)
-        # print(r, x)
-        return np.array([
-            [r],
-            [x[0]]
-        ])
-    
     def approx_A(self, x, u):
+        v = (self.r / 2) * (u[0] + u[1])
         return np.array([
             [1, 0, 0, 0, 0],
-            [((-self.r/2 * np.sin(x[0]) * u[0]) - (self.r/2 * np.sin(x[0]) * u[1])) * self.dt, 1, 0, 0, 0],
-            [((self.r/2 * np.cos(x[0]) * u[0]) + (self.r/2 * np.cos(x[0]) * u[1])) * self.dt, 0, 1, 0, 0],
+            [-v * np.sin(x[0]) * self.dt, 1, 0, 0, 0],
+            [v * np.cos(x[0]) * self.dt, 0, 1, 0, 0],
             [0, 0, 0, 1, 0],
             [0, 0, 0, 0, 1]
         ])

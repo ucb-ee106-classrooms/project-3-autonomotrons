@@ -39,7 +39,8 @@ def main():
         None
     """
     rospy.init_node('estimator_node')
-    estimator_type = rospy.get_param('estimator_type')
+
+    estimator_type = 'extended_kalman_filter' #rospy.get_param('estimator_type')
     if estimator_type == 'oracle_observer':
         estimator = OracleObserver()
     elif estimator_type == 'dead_reckoning':
