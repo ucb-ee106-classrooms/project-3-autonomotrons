@@ -3,7 +3,7 @@ import numpy as np
 plt.rcParams['font.family'] = ['Arial']
 plt.rcParams['font.size'] = 14
 
-
+from time import perf_counter
 class Estimator:
     """A base class to represent an estimator.
 
@@ -253,7 +253,7 @@ class ExtendedKalmanFilter(Estimator):
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
             # You may use self.u, self.y, and self.x[0] for estimation
-            
+            start_time = perf_counter()
             # Step 5: State Extrapolation
             x_new = self.g(self.x[-1], self.u[-1])
             # Step 6: Dynamics Linearization
@@ -275,7 +275,8 @@ class ExtendedKalmanFilter(Estimator):
 
             # Step 11: Covariance Update
             self.P = (np.eye(6) - K @ self.C) @ self.P
-            
+            end_time = perf_counter()
+            print(f"TIME: {end_time - start_time}")
             self.x_hat.append(x_new.flatten())
     
     # God I really hope I coded these right 
