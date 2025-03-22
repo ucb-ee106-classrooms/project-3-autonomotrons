@@ -268,6 +268,7 @@ class DeadReckoning(Estimator):
         super().__init__()
         self.canvas_title = 'Dead Reckoning'
         self.r2d_element = self.r / (2*self.d)
+        self.error = []
     def update(self, _):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
 
@@ -281,6 +282,15 @@ class DeadReckoning(Estimator):
             delta_x = xdot @ u * self.dt
             new_x = curr_pos[1:] + delta_x
             self.x_hat.append(np.hstack([[curr_pos[0]+self.dt], new_x]))
+
+            self.error.append(np.abs(self.x_hat[-1] - self.x[-1]))
+
+            print("SAVING TO FILE")
+            np.savetxt('xhat1.txt', np.array(self.x_hat))
+
+
+            save_to_file('/home/cc/ee106b/sp25/class/ee106b-abh/project3/xhat_dr.txt', self.x_hat)
+            save_to_file('/home/cc/ee106b/sp25/class/ee106b-abh/project3/x_dr.txt', self.x)
 
 
 class KalmanFilter(Estimator):
