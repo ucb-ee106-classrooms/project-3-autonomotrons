@@ -252,7 +252,6 @@ class ExtendedKalmanFilter(Estimator):
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
-            # You may use self.u, self.y, and self.x[0] for estimation
             start_time = perf_counter()
             # Step 5: State Extrapolation
             x_new = self.g(self.x[-1], self.u[-1])
@@ -278,6 +277,7 @@ class ExtendedKalmanFilter(Estimator):
             end_time = perf_counter()
             print(f"TIME: {end_time - start_time}")
             self.x_hat.append(x_new.flatten())
+
     
     # God I really hope I coded these right 
 
@@ -293,7 +293,9 @@ class ExtendedKalmanFilter(Estimator):
         return np.array([np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2), 
                          x[2]])
 
+
     def approx_A(self, x, u):
+        print(x.shape, u.shape)
         return np.array([[1, 0, 0, self.dt, 0, 0],
                         [0, 1, 0, 0, self.dt, 0], 
                         [0, 0, 1, 0, 0, self.dt],
@@ -306,21 +308,3 @@ class ExtendedKalmanFilter(Estimator):
         # Idk why the fudge it makes it into a list, but the parentheses are mandatory so cope
         return np.array([[C11[0], C12[0], 0, 0, 0, 0],
                          [0, 0, 1, 0, 0, 0]])
-    # Let's copy these here for my sanity
-    # Attributes:
-        # u : list
-        #     A list of system inputs, where, for the ith data point u[i],
-        #     u[i][1] is the thrust of the quadrotor
-        #     u[i][2] is right wheel rotational speed (rad/s).
-        # x : list
-        #     A list of system states, where, for the ith data point x[i],
-        #     x[i][0] is translational position in x (m),
-        #     x[i][1] is translational position in z (m),
-        #     x[i][2] is the bearing (rad) of the quadrotor
-        #     x[i][3] is translational velocity in x (m/s),
-        #     x[i][4] is translational velocity in z (m/s),
-        #     x[i][5] is angular velocity (rad/s),
-        # y : list
-        #     A list of system outputs, where, for the ith data point y[i],
-        #     y[i][1] is distance to the landmark (m)
-        #     y[i][2] is relative bearing (rad) w.r.t. the landmark
