@@ -1,6 +1,7 @@
 import rospy
 import os 
-from std_msgs.msg import Float32MultiArray
+import time
+from std_msgs.msg import Float64MultiArray
 import matplotlib.pyplot as plt
 import numpy as np
 plt.rcParams['font.family'] = ['FreeSans', 'Helvetica', 'Arial']
@@ -89,12 +90,12 @@ class Estimator:
         self.ln_x_hat, = self.axd['x'].plot([], 'o-c', label='Estimated')
         self.ln_y, = self.axd['y'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_y_hat, = self.axd['y'].plot([], 'o-c', label='Estimated')
-        self.ln_thl, = self.axd['thl'].plot([], 'o-g', linewidth=2, label='True')
+        # self.ln_thl, = self.axd['thl'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_thl_hat, = self.axd['thl'].plot([], 'o-c', label='Estimated')
-        self.ln_thr, = self.axd['thr'].plot([], 'o-g', linewidth=2, label='True')
+        # self.ln_thr, = self.axd['thr'].plot([], 'o-g', linewidth=2, label='True')
         self.ln_thr_hat, = self.axd['thr'].plot([], 'o-c', label='Estimated')
         
-
+        self.dt = 0.1
         
         self.canvas_title = 'N/A'
 
@@ -104,23 +105,26 @@ class Estimator:
         self.x = []
         self.y = []
         self.x_hat = []  # Your estimates go here!
-        self.dt = 0.1
-        self.sub_u = rospy.Subscriber('u', Float32MultiArray, self.callback_u)
-        self.sub_x = rospy.Subscriber('x', Float32MultiArray, self.callback_x)
-        self.sub_y = rospy.Subscriber('y', Float32MultiArray, self.callback_y)
+        self.first_time = 0.0 # time.perf_counter()
+        self.sub_u = rospy.Subscriber('u', Float64MultiArray, self.callback_u)
+        self.sub_x = rospy.Subscriber('x', Float64MultiArray, self.callback_x)
+        self.sub_y = rospy.Subscriber('y', Float64MultiArray, self.callback_y)
         self.tmr_update = rospy.Timer(rospy.Duration(self.dt), self.update)
-        
+        self.t0 = time.perf_counter()
 
     def callback_u(self, msg):
         self.u.append(msg.data)
 
     def callback_x(self, msg):
-        self.x.append(msg.data)
+        data = list(msg.data)
+        data[0] -= self.t0
+        self.x.append(tuple(data))
         if len(self.x_hat) == 0:
-            self.x_hat.append(msg.data)
+            self.x_hat.append(tuple(data))
 
     def callback_y(self, msg):
         self.y.append(msg.data)
+
 
     def update(self, _):
         raise NotImplementedError
@@ -160,9 +164,9 @@ class Estimator:
         self.plot_xline(self.ln_x_hat, self.x_hat)
         self.plot_yline(self.ln_y, self.x)
         self.plot_yline(self.ln_y_hat, self.x_hat)
-        self.plot_thlline(self.ln_thl, self.x)
+        # self.plot_thlline(self.ln_thl, self.x)
         self.plot_thlline(self.ln_thl_hat, self.x_hat)
-        self.plot_thrline(self.ln_thr, self.x)
+        # self.plot_thrline(self.ln_thr, self.x)
         self.plot_thrline(self.ln_thr_hat, self.x_hat)
         
 
@@ -264,6 +268,7 @@ class DeadReckoning(Estimator):
         super().__init__()
         self.canvas_title = 'Dead Reckoning'
         self.r2d_element = self.r / (2*self.d)
+        self.error = []
     def update(self, _):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
 
@@ -277,6 +282,15 @@ class DeadReckoning(Estimator):
             delta_x = xdot @ u * self.dt
             new_x = curr_pos[1:] + delta_x
             self.x_hat.append(np.hstack([[curr_pos[0]+self.dt], new_x]))
+
+            self.error.append(np.abs(self.x_hat[-1] - self.x[-1]))
+
+            print("SAVING TO FILE")
+            np.savetxt('xhat1.txt', np.array(self.x_hat))
+
+
+            save_to_file('/home/cc/ee106b/sp25/class/ee106b-abh/project3/xhat_dr.txt', self.x_hat)
+            save_to_file('/home/cc/ee106b/sp25/class/ee106b-abh/project3/x_dr.txt', self.x)
 
 
 class KalmanFilter(Estimator):
@@ -322,7 +336,7 @@ class KalmanFilter(Estimator):
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
     def update(self, _):
-        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
+        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0] and len(self.u) > 0:
             
             # Step 5: State Extrapolation
             x_hat_new = self.A @ self.x_hat[-1][2:] + (self.B @ self.u[-1][1:]) * self.dt
@@ -380,16 +394,67 @@ class ExtendedKalmanFilter(Estimator):
     def __init__(self):
         super().__init__()
         self.canvas_title = 'Extended Kalman Filter'
-        self.landmark = (0.5, 0.5)
         # TODO: Your implementation goes here!
         # You may define the Q, R, and P matrices below.
+        self.Q = np.eye(5) * 1
+        self.R = np.eye(3) * 1
+        self.R = np.array([[1, 0.5, 0.1], [0.5, 0.1, 0.2], [0.1, 0.2, 0.2]])*0.001
+        self.P = np.eye(5) * 1
+        self.last_t = None
+        self.C = np.array([[1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]])
 
-    # noinspection DuplicatedCode
+
     def update(self, _):
-        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
+        if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0] and len(self.u) > 0:
             # TODO: Your implementation goes here!
             # You may use self.u, self.y, and self.x[0] for estimation
-            raise NotImplementedError
+
+            # Step 5: State Extrapolation
+            x_new = self.g(self.x_hat[-1][1:], self.u[-1])
+            print("PREVIOUS X_HAT: ", self.x_hat[-1][1:])
+            print("X HAT: ", x_new)
+            print("X ACTUAL: ", self.x[-1][1:])
+            # Step 6: Dynamics Linearization
+            self.A = self.approx_A(self.x_hat[-1][1:], self.u[-1])
+
+            # Step 7: Covariance Extrapolation
+            self.P = self.A @ self.P @ self.A.T + self.Q
+
+            # Step 9: Kalman Gain
+            K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
+
+            # Step 10: State Update
+            y = np.array(self.y[-1][1:])[:, np.newaxis]
+            print("X NEW @ C: ", (self.C @ x_new).shape)
+            print("DIFFERENCE OF X NEW AND MEASURED: ", y - self.C @ x_new)
+            x_hat_final = x_new + K @ (y - self.C @ x_new)
+
+            # Step 11: Covariance Update
+            self.P = (np.eye(5) - K @ self.C) @ self.P
+
+            self.x_hat.append(np.hstack([[self.x_hat[-1][0]+self.dt], x_hat_final.flatten()]))
+            print("LAST T: ", self.x_hat[-1][0])
+            print("DT: ", self.x_hat[-1][0] - self.x_hat[-2][0])
+    def g(self, x, u):
+        phi_dot = (self.r / (2 * self.d) * (u[1] - u[0]))
+        v = self.r / 2 * (u[0] + u[1])
+        return np.array([
+            [x[0] + phi_dot * self.dt],
+            [x[1] + v * np.cos(x[0]) * self.dt],
+            [x[2] + v * np.sin(x[0]) * self.dt],
+            [x[3] + u[0] * self.dt],
+            [x[4] + u[1] * self.dt]
+        ])
+    
+    def approx_A(self, x, u):
+        v = (self.r / 2) * (u[0] + u[1])
+        return np.array([
+            [1, 0, 0, 0, 0],
+            [-v * np.sin(x[0]) * self.dt, 1, 0, 0, 0],
+            [v * np.cos(x[0]) * self.dt, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 1]
+        ])
 
 
 def save_to_file(filename, data):

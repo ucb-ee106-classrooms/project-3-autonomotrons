@@ -3,7 +3,7 @@ import numpy as np
 plt.rcParams['font.family'] = ['Arial']
 plt.rcParams['font.size'] = 14
 
-
+from time import perf_counter
 class Estimator:
     """A base class to represent an estimator.
 
@@ -252,22 +252,12 @@ class ExtendedKalmanFilter(Estimator):
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
-            # You may use self.u, self.y, and self.x[0] for estimation
-            if self.x_hat[-1].shape == (6,):
-                self.x_hat[-1] = self.x_hat[-1][:, np.newaxis]
-            if self.x[-1].shape == (6,):
-                self.x[-1] = self.x[-1][:, np.newaxis]
-            print(self.x_hat[-1].shape)
-            curr_y = self.y[-1][:, np.newaxis]
+            start_time = perf_counter()
             # Step 5: State Extrapolation
             x_new = self.g(self.x[-1], self.u[-1])
-            print(f"x_new shape: {x_new.shape}")
-
             # Step 6: Dynamics Linearization
             self.A = self.approx_A(self.x_hat[-1], self.u[-1])
-            print(f"self.A shape: {self.A.shape}")
-            print(f"self.P shape: {self.P.shape}")
-            print(f"self.Q shape: {self.Q.shape}")
+
             # Step 7: Covariance Extrapolation
             self.P = self.A @ self.P @ self.A.T + self.Q
 
@@ -277,56 +267,44 @@ class ExtendedKalmanFilter(Estimator):
             # Step 9: Kalman Gain
             K = self.P @ self.C.T @ np.linalg.inv(self.C @ self.P @ self.C.T + self.R)
 
+
+            y = self.y[-1][:, np.newaxis]
             # Step 10:  State Update
-            
-            x_new = x_new + K @ (curr_y - self.h(x_new, self.l))
-            print(f"x_new shape: {x_new.shape}")
+            x_new = x_new + K @ (y - self.h(x_new, self.l))
+
             # Step 11: Covariance Update
             self.P = (np.eye(6) - K @ self.C) @ self.P
-            self.x_hat.append(x_new)
+            end_time = perf_counter()
+            print(f"TIME: {end_time - start_time}")
+            self.x_hat.append(x_new.flatten())
+
     
     # God I really hope I coded these right 
 
     def g(self, x, u):
-        u = u[:, np.newaxis]
-        f = (np.array([
-            [x[3][0]],
-            [x[4][0]],
-            [x[5][0]],
-            [0],
-            [-9.8],
-            [0]
-        ])+ np.array([
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [-np.sin(x[2][0]) / self.m, 0],
-            [np.cos(x[2][0]) / self.m, 0],
-            [0, 1 / self.J]
-        ]) @ u)
-        #print(f"f shape {f.shape}, x shape{x.shape}")
-        return x + f * self.dt
-          
-        # return np.array([[np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2)], 
-        #                  [x[2]]])
+        return np.array([[x[0] + x[3] * self.dt],
+                         [x[1] + x[4] * self.dt],
+                         [x[2] + x[5] * self.dt], 
+                         [x[3] - (np.sin(x[2])/self.m) * u[0] * self.dt], 
+                         [x[4] + ((np.cos(x[2])/self.m) * u[0] - self.gr) * self.dt], 
+                         [x[5] + (u[1]/self.J) * self.dt]])
+
+    def h(self, x, y_obs):
+        return np.array([np.sqrt((y_obs[0] - x[0]) ** 2 + y_obs[1] ** 2 + (y_obs[2] - x[2]) ** 2), 
+                         x[2]])
+
 
     def approx_A(self, x, u):
         print(x.shape, u.shape)
         return np.array([[1, 0, 0, self.dt, 0, 0],
                         [0, 1, 0, 0, self.dt, 0], 
                         [0, 0, 1, 0, 0, self.dt],
-                        [0, 0, (-np.cos(x[2][0])/self.m) * u[1] * self.dt, 1, 0, 0],
-                        [0, 0, (-np.sin(x[2][0])/self.m) * u[1] * self.dt, 0, 1, 0],
-                        [0, 0, 0, 0, 0, 1]
-                    ])
+                        [0, 0, (-np.cos(x[2])/self.m) * u[0] * self.dt, 1, 0, 0],
+                        [0, 0, (-np.sin(x[2])/self.m) * u[0] * self.dt, 0, 1, 0],
+                        [0, 0, 0, 0, 0, 1]])
     def approx_C(self, x):
-        r = (np.sqrt((self.l[0]-x[0][0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1][0])))
-        return np.array([[(-self.l[0] + x[0][0])/r, (-self.l[2] + x[1][0])/r, 0, 0, 0, 0],
-                         [0, 0, 1, 0, 0, 0]
-                        ])
-
-    def h(self, x, l):
-        return np.array([
-            [(np.sqrt((l[0]-x[0][0]) ** 2 + l[1] ** 2 + (l[2] - x[1][0])))],
-            [x[2][0]]
-        ])
+        C11 = (-self.l[0] + x[0])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1])))
+        C12 = (-self.l[2] + x[1])/(np.sqrt((self.l[0]-x[0]) ** 2 + self.l[1] ** 2 + (self.l[2] - x[1])))
+        # Idk why the fudge it makes it into a list, but the parentheses are mandatory so cope
+        return np.array([[C11[0], C12[0], 0, 0, 0, 0],
+                         [0, 0, 1, 0, 0, 0]])
