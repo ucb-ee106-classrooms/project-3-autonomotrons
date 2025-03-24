@@ -245,9 +245,9 @@ class ExtendedKalmanFilter(Estimator):
         self.A = None
         self.B = None
         self.C = None
-        self.Q = np.eye(6)
-        self.R = np.eye(2)
-        self.P = np.eye(6)
+        self.Q = np.eye(6) * 0.01
+        self.R = np.eye(2) * 15
+        self.P = np.eye(6) 
 
     # noinspection DuplicatedCode
     def update(self, i):
